@@ -21,9 +21,12 @@ variable "account_id" {
   type = string
 }
 
+data "cato_wfRuleSections" "all" {}
+
 resource "cato_wf_section" "terraform_section" {
   at = {
-    position = "LAST_IN_POLICY"
+    position = "BEFORE_SECTION"
+    ref      = data.cato_wfRuleSections.all.items[0].id
   }
   section = {
     name = "Terraform Rules"

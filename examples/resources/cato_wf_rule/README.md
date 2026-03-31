@@ -40,3 +40,50 @@ terraform apply -parallelism=1
 ```
 
 > **Note:** The `-parallelism=1` flag is recommended by Cato Networks since their API requires sequential execution.
+
+## Sequence Matters: Sections and Rules
+
+The order in which sections and rules are defined in your Terraform config matters. Cato's WAN Firewall policy is evaluated **top-to-bottom** — the first matching rule wins.
+
+### Section Positioning
+
+Sections support only these `position` values:
+- `LAST_IN_POLICY` — adds the section at the bottom
+- `BEFORE_SECTION` — places the section before an existing section (requires `ref`)
+- `AFTER_SECTION` — places the section after an existing section (requires `ref`)
+
+To place a section at the **top**, use `BEFORE_SECTION` with a reference to the first existing section. You can fetch existing sections using the `cato_wfRuleSections` data source:
+
+```hcl
+data "cato_wfRuleSections" "all" {}
+
+resource "cato_wf_section" "my_section" {
+  at = {
+    position = "BEFORE_SECTION"
+    ref      = data.cato_wfRuleSections.all.items[0].id
+  }
+  section = { name = "My Section" }
+}
+```
+
+### Rule Positioning Within a Section
+
+Rules placed in a section depend on that section existing first. Use `FIRST_IN_SECTION` or `LAST_IN_SECTION` with `ref` pointing to the section ID:
+
+```hcl
+resource "cato_wf_rule" "my_rule" {
+  at = {
+    position = "FIRST_IN_SECTION"
+    ref      = cato_wf_section.my_section.section.id
+  }
+  rule = { ... }
+}
+```
+
+### Why `-parallelism=1` Is Required
+
+Cato's API requires sequential execution. Without `-parallelism=1`, Terraform may try to create the section and rule simultaneously, causing the rule creation to fail because the section doesn't exist yet. Always use:
+
+```bash
+terraform apply -parallelism=1
+```
