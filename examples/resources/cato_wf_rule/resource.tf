@@ -8,6 +8,9 @@ resource "cato_wf_rule" "allow_all_and_log" {
     enabled   = true
     action    = "ALLOW"
     direction = "BOTH"
+    source      = {}
+    destination = {}
+    application = {}
     tracking = {
       event = {
         enabled = true
@@ -57,6 +60,7 @@ resource "cato_wf_rule" "allow_smbv3_to_dc" {
         }
       ]
     }
+    application = {}
     tracking = {
       event = {
         enabled = true
