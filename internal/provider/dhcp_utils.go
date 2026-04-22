@@ -32,7 +32,16 @@ func checkForDhcpRelayGroup(ctx context.Context, client *catoClientData, relayGr
 		return "", false, fmt.Errorf("when dhcp_type is DHCP_RELAY, specify either relay_group_id or relay_group_name, but not both")
 	}
 
-	// Lookup and validate the DHCP relay group exists
+	// FIX: If relay_group_id is provided, return it directly without lookup
+	// This avoids permission issues with EntityLookup and correctly sends the ID to the API
+	if hasRelayGroupId {
+		tflog.Debug(ctx, "checkForDhcpRelayGroup: using provided relay_group_id directly", map[string]interface{}{
+			"relay_group_id": relayGroupId,
+		})
+		return relayGroupId, true, nil
+	}
+
+	// Only do EntityLookup when relay_group_name is provided (to resolve name to ID)
 	dhcpRelayGroupResult, err := client.catov2.EntityLookupMinimal(ctx, client.AccountId, cato_models.EntityTypeDhcpRelayGroup, nil, nil, nil, nil, nil)
 	tflog.Warn(ctx, "checkForDhcpRelayGroup.dhcpRelayGroupResult.response", map[string]interface{}{
 		"response": utils.InterfaceToJSONString(dhcpRelayGroupResult),
@@ -41,28 +50,14 @@ func checkForDhcpRelayGroup(ctx context.Context, client *catoClientData, relayGr
 		return "", false, fmt.Errorf("catov2 API EntityLookup error: %w", err)
 	}
 
-	// Check if the specified relay group exists
+	// Lookup relay group by name and return the ID
 	for _, item := range dhcpRelayGroupResult.EntityLookup.Items {
-		if hasRelayGroupId {
-			if item.Entity.GetID() == relayGroupId {
-				name := item.Entity.GetName()
-				if name == nil {
-					return "", false, fmt.Errorf("failed to get dhcpRelayGroup name for id %s", relayGroupId)
-				}
-				return *name, true, nil
-			}
-		} else if hasRelayGroupName {
-			if namePtr := item.Entity.GetName(); namePtr != nil && *namePtr == relayGroupName {
-				// Return the ID when found by name
-				return item.Entity.GetID(), true, nil
-			}
+		if namePtr := item.Entity.GetName(); namePtr != nil && *namePtr == relayGroupName {
+			// Return the ID when found by name
+			return item.Entity.GetID(), true, nil
 		}
 	}
 
-	// Relay group not found
-	if hasRelayGroupId {
-		return "", false, fmt.Errorf("DHCP relay group with ID '%s' not found", relayGroupId)
-	} else {
-		return "", false, fmt.Errorf("DHCP relay group with name '%s' not found", relayGroupName)
-	}
+	// Relay group not found by name
+	return "", false, fmt.Errorf("DHCP relay group with name '%s' not found", relayGroupName)
 }
